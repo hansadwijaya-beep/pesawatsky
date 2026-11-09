@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPACE MISSION – PETUALANGAN LUAR ANGKASA</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <!-- MediaPipe Hands & Camera Utils -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background-color: #030712;
+            color: #ffffff;
+            overflow: hidden;
+        }
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        .glow-text-cyan {
+            text-shadow: 0 0 10px rgba(6, 182, 212, 0.8), 0 0 20px rgba(6, 182, 212, 0.4);
+        }
+        .glow-text-yellow {
+            text-shadow: 0 0 10px rgba(234, 179, 8, 0.8), 0 0 20px rgba(234, 179, 8, 0.4);
+        }
+        .glow-box-cyan {
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.5), inset 0 0 15px rgba(6, 182, 212, 0.2);
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+        /* Custom scrollbar inside modal */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.5);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen relative flex flex-col justify-between overflow-hidden">
+
+    <!-- CANVAS BACKGROUND & GAME ENGINE -->
+    <canvas id="gameCanvas" class="absolute inset-0 z-0 w-full h-full"></canvas>
+    
+    <!-- HIDDEN CAMERA FEED FOR MEDIAPIPE -->
+    <video id="webcamVideo" class="hidden" playsinline></video>
+
+    <!-- TOP NAVBAR / HUD -->
+    <header id="topNavbar" class="relative z-10 w-full glass-panel px-4 py-2 flex items-center justify-between border-b border-cyan-500/30 shadow-lg hidden">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-full bg-cyan-950 border border-cyan-400 flex items-center justify-center text-cyan-400 font-bold text-lg">
+                <i class="fa-solid fa-user-astronaut"></i>
+            </div>
+            <div>
+                <p class="text-xs text-cyan-300 uppercase tracking-widest">Astronot Masa Depan</p>
+                <p id="hudPlayerName" class="font-orbitron font-bold text-cyan-100 text-sm md:text-base">Pemain</p>
+            </div>
+        </div>
+
+        <!-- PROGRESS & SCORE -->
+        <div class="flex items-center space-x-6">
+            <!-- Mission Badge -->
+            <div class="text-center hidden sm:block">
+                <p class="text-xs text-purple-300 uppercase">Misi Aktif</p>
+                <span id="hudMissionTitle" class="font-orbitron text-xs font-bold text-purple-200 bg-purple-900/60 px-2 py-0.5 rounded border border-purple-400/40">
+                    Misi 1: Produsen
+                </span>
+            </div>
+
+            <!-- Hearts / Lives -->
+            <div class="flex items-center space-x-1" id="hudLives">
+                <i class="fa-solid fa-heart text-red-500 text-lg animate-pulse"></i>
+                <i class="fa-solid fa-heart text-red-500 text-lg animate-pulse"></i>
+                <i class="fa-solid fa-heart text-red-500 text-lg animate-pulse"></i>
+            </div>
+
+            <!-- Score -->
+            <div class="bg-black/40 px-3 py-1 rounded-lg border border-cyan-500/40 flex items-center space-x-2">
+                <i class="fa-solid fa-trophy text-yellow-400"></i>
+                <span id="hudScore" class="font-orbitron text-lg font-bold text-yellow-300">0</span>
+            </div>
+        </div>
+
+        <!-- CONTROL STATUS & TOGGLE CAM -->
+        <div class="flex items-center space-x-2">
+            <button id="btnToggleCam" onclick="toggleCamera()" class="px-3 py-1.5 rounded-lg text-xs font-orbitron font-semibold bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/50 flex items-center space-x-2 transition-all">
+                <i class="fa-solid fa-video" id="camIcon"></i>
+                <span id="camStatusText">Aktifkan Kamera</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- SCREEN 1: START SCREEN / WELCOME -->
+    <div id="startScreen" class="relative z-20 w-full h-full flex flex-col items-center justify-center p-4">
+        <div class="glass-panel p-6 md:p-10 rounded-2xl max-w-lg w-full text-center space-y-6 border border-cyan-500/50 shadow-2xl relative overflow-hidden">
+            <!-- Glow background effect -->
+            <div class="absolute -top-20 -left-20 w-40 h-40 bg-cyan-500/20 rounded-full blur-3xl"></div>
+            <div class="absolute -bottom-20 -right-20 w-40 h-40 bg-purple-500/20 rounded-full blur-3xl"></div>
+
+            <div class="space-y-2">
+                <div class="inline-block px-3 py-1 bg-cyan-500/10 border border-cyan-400/40 rounded-full text-xs font-orbitron text-cyan-300 tracking-wider">
+                    IPAS KELAS 5 - EKOSISTEM
+                </div>
+                <h1 class="text-3xl md:text-5xl font-orbitron font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-200 to-purple-400 glow-text-cyan leading-tight">
+                    SPACE MISSION
+                </h1>
+                <p class="text-sm md:text-base text-cyan-200/80 font-medium">Petualangan Rantai Makanan Luar Angkasa</p>
+            </div>
+
+            <div class="space-y-4 text-left">
+                <label for="playerNameInput" class="block text-xs font-orbitron text-cyan-300 uppercase tracking-widest">Masukkan Nama Astronot:</label>
+                <div class="relative">
+                    <input type="text" id="playerNameInput" placeholder="Contoh: Budi Super" 
+                           class="w-full bg-slate-900/90 border border-cyan-500/60 rounded-xl px-4 py-3 text-cyan-100 font-bold focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/40 transition-all font-orbitron placeholder-slate-500" maxLength="15">
+                    <i class="fa-solid fa-rocket absolute right-4 top-3.5 text-cyan-400/60"></i>
+                </div>
+            </div>
+
+            <!-- Kontrol Mode Info -->
+            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-700/60 text-xs text-slate-300 space-y-1">
+                <p class="font-bold text-cyan-300 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-gamepad"></i> Metode Kontrol Pesawat:
+                </p>
+                <p><i class="fa-solid fa-hand text-yellow-400"></i> <b>Kamera Hand Tracking:</b> Geser posisi telapak tangan di depan kamera.</p>
+                <p><i class="fa-solid fa-keyboard text-cyan-400"></i> <b>Keyboard / Mouse:</b> Gunakan Tombol Panah/WASD atau Geser Mouse.</p>
+            </div>
+
+            <button onclick="startGame()" class="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 font-orbitron font-bold text-lg text-white shadow-lg shadow-cyan-500/30 transform hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center space-x-2">
+                <span>MEMULAI MISI</span>
+                <i class="fa-solid fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- MISSION SELECT OVERLAY (Appears between missions or at pause) -->
+    <div id="missionSelectModal" class="relative z-30 fixed inset-0 glass-panel flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900/90 border border-cyan-500/50 p-6 rounded-2xl max-w-2xl w-full space-y-6 text-center shadow-2xl">
+            <h2 class="text-2xl md:text-3xl font-orbitron font-bold text-cyan-300 glow-text-cyan">PILIH MISI GALAKSI</h2>
+            <p class="text-xs md:text-sm text-slate-300">Selesaikan setiap misi secara berurutan untuk memulihkan keseimbangan ekosistem galaksi!</p>
+            
+            <div id="missionGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                <!-- Mission cards dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- QUESTION HUD BANNER (DURING GAMEPLAY) -->
+    <div id="questionOverlay" class="relative z-10 w-full max-w-4xl mx-auto px-4 mt-2 hidden">
+        <div class="glass-panel p-4 rounded-xl border border-cyan-400/40 shadow-xl space-y-2">
+            <div class="flex justify-between items-center text-xs font-orbitron">
+                <span id="questionTag" class="px-2 py-0.5 rounded bg-cyan-900/80 text-cyan-300 border border-cyan-400/40">Q1 - LOTS</span>
+                <span id="missionProgressText" class="text-slate-300">Soal 1 dari 3</span>
+            </div>
+            <p id="questionText" class="text-sm md:text-base font-bold text-slate-100 leading-snug">
+                Pertanyaan akan muncul di sini...
+            </p>
+        </div>
+    </div>
+
+    <!-- FEEDBACK MODAL (CORRECT / WRONG ANSWER) -->
+    <div id="feedbackModal" class="relative z-40 fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden">
+        <div id="feedbackContainer" class="bg-slate-900 border-2 p-6 rounded-2xl max-w-md w-full text-center space-y-4 shadow-2xl transform transition-all">
+            <div id="feedbackIcon" class="w-16 h-16 mx-auto rounded-full flex items-center justify-center text-3xl">
+                <!-- Icon inserted via JS -->
+            </div>
+            <h3 id="feedbackTitle" class="text-2xl font-orbitron font-bold"></h3>
+            <p id="feedbackText" class="text-sm text-slate-200 leading-relaxed bg-slate-800/80 p-3 rounded-lg border border-slate-700"></p>
+            <button onclick="closeFeedback()" class="w-full py-3 rounded-xl font-orbitron font-bold text-white bg-cyan-600 hover:bg-cyan-500 shadow-lg transition-all">
+                LANJUTKAN MISI <i class="fa-solid fa-arrow-right ml-1"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- GAME OVER / VICTORY SCREEN -->
+    <div id="endScreen" class="relative z-30 fixed inset-0 glass-panel flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900/95 border border-cyan-500/60 p-6 md:p-8 rounded-2xl max-w-lg w-full text-center space-y-6 shadow-2xl relative">
+            <div class="w-20 h-20 mx-auto rounded-full bg-yellow-500/20 border-2 border-yellow-400 flex items-center justify-center text-yellow-400 text-4xl glow-box-cyan">
+                <i class="fa-solid fa-trophy" id="endIcon"></i>
+            </div>
+
+            <div class="space-y-2">
+                <h2 id="endTitle" class="text-3xl font-orbitron font-black text-yellow-300 glow-text-yellow">MISI SELESAI!</h2>
+                <p id="endSubtitle" class="text-sm text-cyan-200">Selamat Astronot!</p>
+            </div>
+
+            <div class="bg-slate-800/80 p-4 rounded-xl border border-cyan-500/30 space-y-3">
+                <p class="text-xs text-cyan-400 font-orbitron uppercase">Pesan Penghargaan Khusus:</p>
+                <p id="endMessage" class="text-sm md:text-base text-slate-100 font-semibold italic">
+                    "Kerja bagus, [Nama]! Kamu telah berhasil menjaga keseimbangan Rantai Makanan di Seluruh Galaksi!"
+                </p>
+                <div class="pt-2 border-t border-slate-700/60 flex justify-around text-center">
+                    <div>
+                        <p class="text-xs text-slate-400">Total Skor</p>
+                        <p id="endFinalScore" class="font-orbitron text-xl font-bold text-yellow-400">0</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400">Akurasi Jawab</p>
+                        <p id="endAccuracy" class="font-orbitron text-xl font-bold text-cyan-400">100%</p>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="restartGame()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 font-orbitron font-bold text-white shadow-lg transition-all flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span>MAIN LAGI</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- BOTTOM HELPER & CONTROLS BANNER -->
+    <footer id="bottomFooter" class="relative z-10 w-full glass-panel px-4 py-2 flex items-center justify-between text-xs text-slate-400 border-t border-cyan-500/30 hidden">
+        <div class="flex items-center space-x-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            <span id="controlStatusIndicator">Kontrol: Mouse / Keyboard Active</span>
+        </div>
+        <div class="hidden md:block">
+            Arahkan pesawat astronot ke asteroid yang membawa <span class="text-cyan-300 font-bold">Jawaban Benar</span>!
+        </div>
+    </footer>
+
+    <!-- AUDIO SYSTEM (WEB AUDIO API SYNTHESIZER) -->
+    <script>
+        // Web Audio Synthesizer for SFX without external audio files
+        const AudioSys = {
+            ctx: null,
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            },
+            playCorrect() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, now); // C5
+                osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+                osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.4);
+            },
+            playWrong() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, now); // A3
+                osc.frequency.setValueAtTime(146.83, now + 0.15); // D3
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.4);
+            },
+            playLaser() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(800, now);
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.15);
+            }
+        };
+    </script>
+
+    <!-- DATABASE SOAL IPAS KELAS 5 (5 MISI x 3 PERTANYAAN = 15 SOAL) -->
+    <script>
+        const MISSIONS_DATA = [
+            {
+                id: 1,
+                title: "Misi 1: Produsen Ekosistem",
+                desc: "Mengenal Peran Tumbuhan & Komponen Utama Rantai Makanan",
+                questions: [
+                    {
+                        type: "LOTS",
+                        q: "Organisme yang berperan sebagai produsen utama dalam rantai makanan adalah...",
+                        options: ["Tumbuhan Hijau", "Kelinci", "Jamur/Pengurai", "Harimau"],
+                        answer: 0,
+                        exp: "Tumbuhan hijau adalah produsen karena dapat membuat makanannya sendiri melalui proses fotosintesis."
+                    },
+                    {
+                        type: "MOTS",
+                        q: "Mengapa tumbuhan hijau disebut sebagai organisme autotrof dalam ekosistem?",
+                        options: ["Menghasilkan makanan sendiri", "Memakan hewan lain", "Membusukkan sisa makhluk hidup", "Bergantung pada konsumen"],
+                        answer: 0,
+                        exp: "Autotrof berarti mampu menghasilkan zat makanan sendiri menggunakan energi matahari."
+                    },
+                    {
+                        type: "HOTS",
+                        q: "Jika populasi tumbuhan di suatu hutan menurun drastis karena penebangan liar, dampak utamanya adalah...",
+                        options: ["Konsumen I kekurangan makanan", "Populasi pemakan daging melonjak", "Pengurai berhenti bekerja", "Populasi omnivora melipat ganda"],
+                        answer: 0,
+                        exp: "Penurunan produsen langsung menyebabkan Konsumen I (herbivora) kelaparan dan jumlahnya berkurang drastis."
+                    }
+                ]
+            },
+            {
+                id: 2,
+                title: "Misi 2: Konsumen I (Herbivora)",
+                desc: "Memahami Pemakan Produsen dan Transfer Energi",
+                questions: [
+                    {
+                        type: "LOTS",
+                        q: "Hewan yang tergolong dalam Konsumen Tingkat I (Herbivora) adalah...",
+                        options: ["Belalang & Kelinci", "Serigala & Elang", "Bakteri & Jamur", "Ular & Katak"],
+                        answer: 0,
+                        exp: "Belalang dan kelinci memakan tumbuhan (produsen) secara langsung."
+                    },
+                    {
+                        type: "MOTS",
+                        q: "Dalam rantai makanan: Padi -> Belalang -> Katak -> Ular, siapakah Konsumen I?",
+                        options: ["Belalang", "Padi", "Katak", "Ular"],
+                        answer: 0,
+                        exp: "Belalang adalah pemakan langsung tanaman Padi (Produsen), sehingga disebut Konsumen I."
+                    },
+                    {
+                        type: "HOTS",
+                        q: "Seorang petani membasmi seluruh belalang di sawahnya. Dampak jangka pendek pada Katak adalah...",
+                        options: ["Katak kekurangan makanan", "Katak bertambah banyak", "Padi berkurang drastis", "Ular memakan padi"],
+                        answer: 0,
+                        exp: "Katak memangsa belalang. Jika belalang punah, katak akan kehilangan sumber makanan utamanya."
+                    }
+                ]
+            },
+            {
+                id: 3,
+                title: "Misi 3: Konsumen II & III (Karnivora/Predator)",
+                desc: "Tingkat Tropik Lanjutan & Pemangsa Puncak",
+                questions: [
+                    {
+                        type: "LOTS",
+                        q: "Hewan pemakan daging atau pemangsa hewan lain disebut...",
+                        options: ["Karnivora", "Herbivora", "Produsen", "Dekomposer"],
+                        answer: 0,
+                        exp: "Karnivora adalah istilah untuk kelompok hewan pemakan daging."
+                    },
+                    {
+                        type: "MOTS",
+                        q: "Pada skenario laut: Fitoplankton -> Udang -> Ikan Kecil -> Hiu. Hiu berperan sebagai...",
+                        options: ["Konsumen Puncak (III)", "Produsen Utama", "Konsumen Tingkat I", "Pengurai"],
+                        answer: 0,
+                        exp: "Hiu berada di posisi akhir (puncak) rantai makanan laut sebagai Konsumen III."
+                    },
+                    {
+                        type: "HOTS",
+                        q: "Mengapa jumlah energi pada Konsumen Tingkat III lebih sedikit dibanding Konsumen I?",
+                        options: ["Energi berkurang di setiap tingkat", "Konsumen III tidak butuh energi", "Tumbuhan menyimpan energi Konsumen III", "Energi hanya milik produsen"],
+                        answer: 0,
+                        exp: "Transfer energi berkurang sekitar 90% pada setiap kenaikan tingkat tropik karena dipakai bergerak & bernapas."
+                    }
+                ]
+            },
+            {
+                id: 4,
+                title: "Misi 4: Pengurai (Dekomposer)",
+                desc: "Pahlawan Daur Ulang Nutrisi Tanah",
+                questions: [
+                    {
+                        type: "LOTS",
+                        q: "Makhluk hidup yang bertugas menguraikan sisa organisme mati menjadi hara adalah...",
+                        options: ["Bakteri & Jamur", "Elang & Harimau", "Rumput & Pohon", "Kambing & Sapi"],
+                        answer: 0,
+                        exp: "Pengurai atau dekomposer terdiri dari jamur, bakteri, dan cacing tanah."
+                    },
+                    {
+                        type: "MOTS",
+                        q: "Zat hara hasil penguraian zat organik oleh dekomposer dimanfaatkan oleh...",
+                        options: ["Tumbuhan (Produsen)", "Hewan Pemangsa", "Konsumen Puncak", "Karnivora"],
+                        answer: 0,
+                        exp: "Zat hara yang diserap tanah dijadikan nutrisi penting bagi tumbuh-tumbuhan untuk bertumbuh."
+                    },
+                    {
+                        type: "HOTS",
+                        q: "Apa yang terjadi pada ekosistem jika tidak ada organisme pengurai (dekomposer)?",
+                        options: ["Bangkai menumpuk & tanah tandus", "Tumbuhan makin subur", "Hewan tidak bisa mati", "Rantai makanan makin cepat"],
+                        answer: 0,
+                        exp: "Tanpa dekomposer, sisa makhluk hidup tidak akan terurai, sehingga tanah kekurangan nutrisi hara."
+                    }
+                ]
+            },
+            {
+                id: 5,
+                title: "Misi 5: Jaring-Jaring & Keseimbangan Ekosistem",
+                desc: "Analisis Kompleks Dinamika Ekosistem Galaksi",
+                questions: [
+                    {
+                        type: "LOTS",
+                        q: "Kumpulan dari beberapa rantai makanan yang saling berhubungan disebut...",
+                        options: ["Jaring-jaring Makanan", "Piramida Ekosistem", "Siklus Air", "Komunitas Hewan"],
+                        answer: 0,
+                        exp: "Jaring-jaring makanan gabungan kompleks dari beberapa rantai makanan yang saling terkait."
+                    },
+                    {
+                        type: "MOTS",
+                        q: "Suatu ekosistem dikatakan seimbang apabila...",
+                        options: ["Komponen Produsen lebih banyak", "Karnivora lebih banyak dari tumbuhan", "Semua konsumen bertambah cepat", "Tidak ada dekomposer"],
+                        answer: 0,
+                        exp: "Keseimbangan ekosistem dicapai jika jumlah produsen secara proporsional lebih banyak daripada konsumen."
+                    },
+                    {
+                        type: "HOTS",
+                        q: "Jika perburuan Ular di sawah marak terjadi, urutan dampak yang paling tepat adalah...",
+                        options: ["Tikus merajalela -> Padi gagal panen", "Padi melimpah -> Tikus berkurang", "Elang bertambah -> Padi melimpah", "Petani untung -> Tikus punah"],
+                        answer: 0,
+                        exp: "Ular adalah pemangsa tikus. Hilangnya ular membuat populasi tikus meledak dan merusak tanaman padi."
+                    }
+                ]
+            }
+        ];
+    </script>
+
+    <!-- GAME ENGINE & HAND TRACKING LOGIC -->
+    <script>
+        // State Management
+        let gameState = {
+            playerName: "Astronot",
+            score: 0,
+            lives: 3,
+            currentMissionIdx: 0,
+            currentQuestionIdx: 0,
+            unlockedMission: 0, // max mission index unlocked
+            isGameRunning: false,
+            totalCorrect: 0,
+            totalAnswered: 0,
+            cameraActive: false
+        };
+
+        // Canvas & Context Setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Spaceship Player Entity
+        const player = {
+            x: window.innerWidth / 2,
+            y: window.innerHeight - 100,
+            width: 60,
+            height: 70,
+            speed: 8,
+            targetX: window.innerWidth / 2,
+            targetY: window.innerHeight - 100,
+            trail: []
+        };
+
+        // Asteroids / Answers Entities
+        let asteroids = [];
+        // Stars Background Entities
+        let stars = [];
+        const STAR_COUNT = 150;
+
+        function initStars() {
+            stars = [];
+            for (let i = 0; i < STAR_COUNT; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 2 + 0.5,
+                    speed: Math.random() * 2 + 0.5,
+                    alpha: Math.random()
+                });
+            }
+        }
+        initStars();
+
+        // Keyboard & Mouse Listeners
+        const keys = {};
+        window.addEventListener('keydown', (e) => { keys[e.key] = true; });
+        window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!gameState.cameraActive && gameState.isGameRunning) {
+                player.targetX = e.clientX;
+                player.targetY = e.clientY;
+            }
+        });
+
+        // Touch Control Support
+        canvas.addEventListener('touchmove', (e) => {
+            if (!gameState.cameraActive && gameState.isGameRunning && e.touches.length > 0) {
+                player.targetX = e.touches[0].clientX;
+                player.targetY = e.touches[0].clientY;
+            }
+        });
+
+        // Start Game Function (From Start Screen)
+        function startGame() {
+            AudioSys.init();
+            const nameInput = document.getElementById('playerNameInput').value.trim();
+            if (nameInput) {
+                gameState.playerName = nameInput;
+            }
+            
+            document.getElementById('hudPlayerName').innerText = gameState.playerName;
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('topNavbar').classList.remove('hidden');
+            document.getElementById('bottomFooter').classList.remove('hidden');
+
+            showMissionSelect();
+        }
+
+        // Show Mission Selection Grid
+        function showMissionSelect() {
+            gameState.isGameRunning = false;
+            const grid = document.getElementById('missionGrid');
+            grid.innerHTML = '';
+
+            MISSIONS_DATA.forEach((m, idx) => {
+                const isUnlocked = idx <= gameState.unlockedMission;
+                const card = document.createElement('div');
+                card.className = `p-4 rounded-xl border transition-all ${
+                    isUnlocked 
+                    ? 'bg-slate-800/80 border-cyan-400/50 hover:border-cyan-300 hover:scale-[1.02] cursor-pointer' 
+                    : 'bg-slate-900/50 border-slate-700/50 opacity-60 cursor-not-allowed'
+                }`;
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-orbitron font-bold text-sm ${isUnlocked ? 'text-cyan-300' : 'text-slate-500'}">MISI 0${m.id}</span>
+                        <i class="fa-solid ${isUnlocked ? 'fa-unlock text-emerald-400' : 'fa-lock text-slate-500'}"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-100 text-sm mb-1">${m.title.split(':')[1] || m.title}</h4>
+                    <p class="text-xs text-slate-400">${m.desc}</p>
+                `;
+
+                if (isUnlocked) {
+                    card.onclick = () => startMission(idx);
+                }
+                grid.appendChild(card);
+            });
+
+            document.getElementById('missionSelectModal').classList.remove('hidden');
+            document.getElementById('questionOverlay').classList.add('hidden');
+        }
+
+        // Start Selected Mission
+        function startMission(missionIdx) {
+            gameState.currentMissionIdx = missionIdx;
+            gameState.currentQuestionIdx = 0;
+            document.getElementById('missionSelectModal').classList.add('hidden');
+            document.getElementById('questionOverlay').classList.remove('hidden');
+
+            updateHUD();
+            loadQuestion();
+            gameState.isGameRunning = true;
+        }
+
+        // Load Question and Spawn Asteroids
+        function loadQuestion() {
+            const currentMission = MISSIONS_DATA[gameState.currentMissionIdx];
+            const qData = currentMission.questions[gameState.currentQuestionIdx];
+
+            // Update UI Question Banner
+            document.getElementById('hudMissionTitle').innerText = `Misi ${currentMission.id}: Q${gameState.currentQuestionIdx + 1}`;
+            document.getElementById('questionTag').innerText = `Q${gameState.currentQuestionIdx + 1} - ${qData.type}`;
+            document.getElementById('missionProgressText').innerText = `Soal ${gameState.currentQuestionIdx + 1} dari 3`;
+            document.getElementById('questionText').innerText = qData.q;
+
+            // Generate Asteroids carrying options
+            asteroids = [];
+            const optionCount = qData.options.length;
+            const spacing = canvas.width / (optionCount + 1);
+
+            qData.options.forEach((optText, i) => {
+                const radius = 45 + Math.min(optText.length * 1.5, 25);
+                asteroids.push({
+                    x: spacing * (i + 1),
+                    y: -100 - (i * 30), // staggered start
+                    radius: radius,
+                    speedY: 1.2 + Math.random() * 0.5 + (gameState.currentMissionIdx * 0.2), // Speed increases per mission
+                    text: optText,
+                    isCorrect: i === qData.answer,
+                    rotation: 0,
+                    rotSpeed: (Math.random() - 0.5) * 0.02
+                });
+            });
+        }
+
+        // Update HUD display
+        function updateHUD() {
+            document.getElementById('hudScore').innerText = gameState.score;
+            
+            // Hearts UI
+            const heartsContainer = document.getElementById('hudLives');
+            heartsContainer.innerHTML = '';
+            for (let i = 0; i < 3; i++) {
+                const heart = document.createElement('i');
+                if (i < gameState.lives) {
+                    heart.className = 'fa-solid fa-heart text-red-500 text-lg animate-pulse';
+                } else {
+                    heart.className = 'fa-regular fa-heart text-slate-600 text-lg';
+                }
+                heartsContainer.appendChild(heart);
+            }
+        }
+
+        // GAME LOOP (Animation & Physics)
+        function gameLoop() {
+            // Clear & Draw Starfield Background
+            ctx.fillStyle = '#030712';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Animate Stars
+            ctx.fillStyle = '#ffffff';
+            stars.forEach(star => {
+                star.y += star.speed;
+                if (star.y > canvas.height) {
+                    star.y = 0;
+                    star.x = Math.random() * canvas.width;
+                }
+                ctx.globalAlpha = star.alpha;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1.0;
+
+            if (gameState.isGameRunning) {
+                // Update Player Movement (Keyboard fallback + Smooth interpolation to target)
+                if (keys['ArrowLeft'] || keys['a']) player.targetX -= player.speed * 1.5;
+                if (keys['ArrowRight'] || keys['d']) player.targetX += player.speed * 1.5;
+                if (keys['ArrowUp'] || keys['w']) player.targetY -= player.speed * 1.5;
+                if (keys['ArrowDown'] || keys['s']) player.targetY += player.speed * 1.5;
+
+                // Keep Player in Canvas Bounds
+                player.targetX = Math.max(player.width, Math.min(canvas.width - player.width, player.targetX));
+                player.targetY = Math.max(player.height, Math.min(canvas.height - player.height, player.targetY));
+
+                // Smooth Linear Interpolation (Lerp)
+                player.x += (player.targetX - player.x) * 0.15;
+                player.y += (player.targetY - player.y) * 0.15;
+
+                // Draw Spaceship Thruster Particles
+                player.trail.push({ x: player.x, y: player.y + 35, alpha: 1, size: Math.random() * 8 + 4 });
+                if (player.trail.length > 15) player.trail.shift();
+
+                player.trail.forEach((t) => {
+                    t.y += 3;
+                    t.alpha -= 0.06;
+                    if (t.alpha > 0) {
+                        ctx.fillStyle = `rgba(6, 182, 212, ${t.alpha})`;
+                        ctx.beginPath();
+                        ctx.arc(t.x, t.y, t.size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                });
+
+                // Draw Spaceship Body (SVG/Vector-style on Canvas)
+                drawSpaceship(player.x, player.y);
+
+                // Update & Render Asteroids
+                asteroids.forEach((ast, idx) => {
+                    ast.y += ast.speedY;
+                    ast.rotation += ast.rotSpeed;
+
+                    // Respawn if off screen
+                    if (ast.y - ast.radius > canvas.height) {
+                        ast.y = -80;
+                    }
+
+                    // Render Asteroid Shape & Text
+                    drawAsteroid(ast);
+
+                    // Check Collision with Player Spaceship
+                    const dist = Math.hypot(player.x - ast.x, player.y - ast.y);
+                    if (dist < player.width / 2 + ast.radius) {
+                        // Collision Occurred!
+                        handleAnswerCollision(ast);
+                    }
+                });
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Render Sci-Fi Spaceship
+        function drawSpaceship(x, y) {
+            ctx.save();
+            ctx.translate(x, y);
+
+            // Wing Glow
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#06b6d4';
+
+            // Wings
+            ctx.fillStyle = '#0284c7';
+            ctx.beginPath();
+            ctx.moveTo(0, -35);
+            ctx.lineTo(-30, 25);
+            ctx.lineTo(0, 15);
+            ctx.lineTo(30, 25);
+            ctx.closePath();
+            ctx.fill();
+
+            // Fuselage Main Body
+            ctx.fillStyle = '#e0f2fe';
+            ctx.beginPath();
+            ctx.moveTo(0, -40);
+            ctx.lineTo(-15, 10);
+            ctx.lineTo(0, 25);
+            ctx.lineTo(15, 10);
+            ctx.closePath();
+            ctx.fill();
+
+            // Cockpit Canopy Glass
+            ctx.fillStyle = '#38bdf8';
+            ctx.beginPath();
+            ctx.arc(0, -10, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // Render Asteroid with Answer Text
+        function drawAsteroid(ast) {
+            ctx.save();
+            ctx.translate(ast.x, ast.y);
+            ctx.rotate(ast.rotation);
+
+            // Outer Glowing Rock
+            ctx.fillStyle = '#1e293b';
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = 'rgba(56, 189, 248, 0.4)';
+
+            ctx.beginPath();
+            ctx.arc(0, 0, ast.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Craters details
+            ctx.fillStyle = '#0f172a';
+            ctx.beginPath();
+            ctx.arc(-ast.radius * 0.3, -ast.radius * 0.3, ast.radius * 0.2, 0, Math.PI * 2);
+            ctx.arc(ast.radius * 0.4, ast.radius * 0.2, ast.radius * 0.25, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+
+            // Render Text (Fixed Orientation)
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 13px Rajdhani, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // Wrap long option text inside asteroid
+            const words = ast.text.split(' ');
+            if (words.length > 2) {
+                const mid = Math.ceil(words.length / 2);
+                const line1 = words.slice(0, mid).join(' ');
+                const line2 = words.slice(mid).join(' ');
+                ctx.fillText(line1, ast.x, ast.y - 7);
+                ctx.fillText(line2, ast.x, ast.y + 9);
+            } else {
+                ctx.fillText(ast.text, ast.x, ast.y);
+            }
+        }
+
+        // Answer Collision Handling
+        function handleAnswerCollision(selectedAst) {
+            gameState.isGameRunning = false;
+            gameState.totalAnswered++;
+
+            const qData = MISSIONS_DATA[gameState.currentMissionIdx].questions[gameState.currentQuestionIdx];
+            const modal = document.getElementById('feedbackModal');
+            const iconDiv = document.getElementById('feedbackIcon');
+            const titleEl = document.getElementById('feedbackTitle');
+            const textEl = document.getElementById('feedbackText');
+
+            if (selectedAst.isCorrect) {
+                // Correct Answer Logic
+                AudioSys.playCorrect();
+                gameState.score += 100;
+                gameState.totalCorrect++;
+
+                iconDiv.className = 'w-16 h-16 mx-auto rounded-full flex items-center justify-center text-3xl bg-emerald-500/20 border-2 border-emerald-400 text-emerald-400 glow-box-cyan';
+                iconDiv.innerHTML = '<i class="fa-solid fa-check"></i>';
+                titleEl.className = 'text-2xl font-orbitron font-bold text-emerald-400';
+                titleEl.innerText = 'JAWABAN BENAR (+100 POIN)';
+                textEl.innerHTML = `<span class="text-cyan-300 font-bold">Penjelasan Edukasi:</span><br>${qData.exp}`;
+            } else {
+                // Wrong Answer Logic
+                AudioSys.playWrong();
+                gameState.lives--;
+
+                iconDiv.className = 'w-16 h-16 mx-auto rounded-full flex items-center justify-center text-3xl bg-rose-500/20 border-2 border-rose-400 text-rose-400';
+                iconDiv.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+                titleEl.className = 'text-2xl font-orbitron font-bold text-rose-400';
+                titleEl.innerText = 'JAWABAN KURANG TEPAT';
+                textEl.innerHTML = `<span class="text-rose-300 font-bold">Ulasan Misi:</span><br>${qData.exp}`;
+            }
+
+            updateHUD();
+            modal.classList.remove('hidden');
+        }
+
+        // Close Feedback and Advance Progress
+        function closeFeedback() {
+            document.getElementById('feedbackModal').classList.add('hidden');
+
+            if (gameState.lives <= 0) {
+                showGameOver(false);
+                return;
+            }
+
+            gameState.currentQuestionIdx++;
+            if (gameState.currentQuestionIdx >= 3) {
+                // Completed Current Mission
+                if (gameState.currentMissionIdx === gameState.unlockedMission) {
+                    gameState.unlockedMission = Math.min(gameState.unlockedMission + 1, MISSIONS_DATA.length - 1);
+                }
+
+                if (gameState.currentMissionIdx >= MISSIONS_DATA.length - 1) {
+                    // All Missions Completed Victory!
+                    showGameOver(true);
+                } else {
+                    // Back to Mission Select Modal for Next Level
+                    showMissionSelect();
+                }
+            } else {
+                // Load Next Question in Same Mission
+                loadQuestion();
+                gameState.isGameRunning = true;
+            }
+        }
+
+        // Victory / Game Over Screen
+        function showGameOver(isVictory) {
+            gameState.isGameRunning = false;
+            document.getElementById('questionOverlay').classList.add('hidden');
+            const endScreen = document.getElementById('endScreen');
+
+            const endTitle = document.getElementById('endTitle');
+            const endSubtitle = document.getElementById('endSubtitle');
+            const endMessage = document.getElementById('endMessage');
+            const endIcon = document.getElementById('endIcon');
+            const finalScore = document.getElementById('endFinalScore');
+            const accuracy = document.getElementById('endAccuracy');
+
+            finalScore.innerText = gameState.score;
+            const accPercent = gameState.totalAnswered > 0 ? Math.round((gameState.totalCorrect / gameState.totalAnswered) * 100) : 100;
+            accuracy.innerText = `${accPercent}%`;
+
+            if (isVictory) {
+                AudioSys.playCorrect();
+                endIcon.className = 'fa-solid fa-trophy';
+                endTitle.innerText = 'SELAMAT, MISI SUKSES!';
+                endTitle.className = 'text-3xl font-orbitron font-black text-yellow-300 glow-text-yellow';
+                endSubtitle.innerText = 'Penyelamat Ekosistem Galaksi';
+                endMessage.innerText = `"Luar biasa, Astronot ${gameState.playerName}! Kamu telah berhasil menguasai Rantai Makanan & menjaga keseimbangan Ekosistem di seluruh Galaksi!"`;
+            } else {
+                AudioSys.playWrong();
+                endIcon.className = 'fa-solid fa-triangle-exclamation';
+                endTitle.innerText = 'PESAWAT KEKURANGAN ENERGI';
+                endTitle.className = 'text-3xl font-orbitron font-black text-rose-400';
+                endSubtitle.innerText = 'Misi Terhenti Sementara';
+                endMessage.innerText = `"Tetap semangat, Astronot ${gameState.playerName}! Pelajari kembali materi Rantai Makanan IPAS dan coba selesaikan misi ini lagi!"`;
+            }
+
+            endScreen.classList.remove('hidden');
+        }
+
+        // Restart Game
+        function restartGame() {
+            gameState.score = 0;
+            gameState.lives = 3;
+            gameState.currentMissionIdx = 0;
+            gameState.currentQuestionIdx = 0;
+            gameState.totalCorrect = 0;
+            gameState.totalAnswered = 0;
+
+            document.getElementById('endScreen').classList.add('hidden');
+            updateHUD();
+            showMissionSelect();
+        }
+
+        // MEDIAPIPE HAND TRACKING INTEGRATION
+        let camera = null;
+        const videoElement = document.getElementById('webcamVideo');
+
+        function onHandResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                // Landmark 9 is middle finger MCP (Palm Center area)
+                const palmCenter = landmarks[9];
+
+                // Mirror X-axis for natural camera control
+                const targetX = (1 - palmCenter.x) * canvas.width;
+                const targetY = palmCenter.y * canvas.height;
+
+                player.targetX = targetX;
+                player.targetY = targetY;
+            }
+        }
+
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+        hands.onResults(onHandResults);
+
+        async function toggleCamera() {
+            const statusText = document.getElementById('camStatusText');
+            const camIcon = document.getElementById('camIcon');
+            const indicator = document.getElementById('controlStatusIndicator');
+
+            if (!gameState.cameraActive) {
+                try {
+                    statusText.innerText = "Mengaktifkan...";
+                    camera = new Camera(videoElement, {
+                        onFrame: async () => {
+                            await hands.send({ image: videoElement });
+                        },
+                        width: 640,
+                        height: 480
+                    });
+                    await camera.start();
+                    gameState.cameraActive = true;
+                    statusText.innerText = "Kamera Aktif";
+                    camIcon.className = "fa-solid fa-video text-emerald-400";
+                    indicator.innerText = "Kontrol: MediaPipe Hand Gesture Active";
+                    indicator.className = "text-emerald-400 font-bold";
+                } catch (err) {
+                    console.error("Camera access failed: ", err);
+                    alert("Gagal mengakses kamera. Menggunakan kontrol Mouse/Keyboard.");
+                    statusText.innerText = "Kamera Gagal";
+                    gameState.cameraActive = false;
+                }
+            } else {
+                if (camera) {
+                    await camera.stop();
+                }
+                gameState.cameraActive = false;
+                statusText.innerText = "Aktifkan Kamera";
+                camIcon.className = "fa-solid fa-video-slash text-slate-400";
+                indicator.innerText = "Kontrol: Mouse / Keyboard Active";
+                indicator.className = "text-slate-400";
+            }
+        }
+
+        // Initialize Loop on Window Load
+        window.onload = function() {
+            gameLoop();
+        };
+    </script>
+</body>
+</html>
